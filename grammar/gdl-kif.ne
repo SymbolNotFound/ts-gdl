@@ -32,13 +32,13 @@ let lexer = moo.compile({
     lineBreaks: true
   },
   COMMENT: {
-    match: /;[^\n]*/,
+    match: /;+([^\n]*)/,
     value: s => s.substring(1).trim()
   },
   '(': '(',
   ')': ')',
   L_INFER: '<=',
-  QUESTION_MARK: '?',
+  '?': '?',
   NUMBER: {
     match: /(0|-?[1-9][0-9]*)/,
     value: s => Number(s)
@@ -72,29 +72,18 @@ let lexer = moo.compile({
 
 @lexer lexer
 
+#-----------+
+# SENTENCES |
+#===========*
+
 # First production rule is the default production for the parser.
-input -> sentence+ {% id %}
-
-# Nearley doesn't provide the _ and __ shorthands when using a lexer,
-# but they are much more convenient and readable than %SPACE:* or %SPACE
-# and during matching it allows us to fold them all into `null` as well.
-
-# optional space
-_ -> null | %SPACE {% d => null %}
-# mandatory space
-__ -> %SPACE {% d => null %}
+input -> _ sentence+ _ {% id %}
 
 # This production rule handles multiple sentences surrounded by optional space.
-sentence+ ->
-  # continuation if there are multiple sentences
-  sentence+ _ sentence {% d => [ ...d[0], d[2] ] %}
-  # reading only a single sentence
-  | _ sentence {% d => [d[0]] %}
+sentence+ -> sentence {% d => [d[0]] %}
 
-  # consume space with newlines
-  | sentence+ _ "\n" {% d => d[0] %}
-  # end of input, ignore remaining spaces
-  | _ {% d => [] %}
+# continuation if there are multiple sentences
+sentence+ -> sentence+ _ sentence {% d => [ ...d[0], d[2] ] %}
 
 sentence ->
     role_defn {% id %}
@@ -102,6 +91,45 @@ sentence ->
   | base_rule {% id %}
   | inference {% id %}
   | relation  {% id %}
+
+#-----------+
+# INFERENCE |
+#===========*
+
+# This is a kind of right-to-left inference within a stratified and universally
+# quantified logic as defined by GDL.  The expression is true when either
+# head_expression is true or any body expressions are not true, or both.
+inference -> "(" _ %L_INFER __ head_relation (__ body_relation):* _ ")" {%
+    d => ({
+      type: "infer",
+      head: d[4],
+      body: d[5],
+      start: startOfToken(d[0]),
+      end: end(d[7])
+    })
+%}
+
+
+# Only certain game-independent relations will be in the head of an inference.
+head_relation ->
+    input_relation {% id %}
+  | next_relation  {% id %}
+  | base_rule      {% id %}
+  | proposition    {% id %}
+
+# Only certain game-independent relations will be in the body of an inference.
+body_relation ->
+    does_relation {% id %}
+  | role_reln     {% id %}
+  | proposition   {% id %}
+
+proposition -> "(" _ name __ parameters _ ")" {%
+    s => newFunction(s[2].name, s[4], s[0].start, end(s[6]))
+%}
+
+#--------------+
+# PLAYER ROLES |
+#==============*
 
 # Role definition, a role relation appearing at the global scope.
 role_defn -> "(" _ "role" __ name _ ")" {%
@@ -113,10 +141,8 @@ role_defn -> "(" _ "role" __ name _ ")" {%
   })
 %}
 
-# A role relation can refer to a ground term or a variable.  When it is in the
-# global scope it must contain a ground term, but as a relation it may retain a
-# reference to a free variable, usually to constrain an inference.
-role_relation -> "(" _ "role" __ var_or_name _ ")" {%
+# A role relation can refer to a ground term or a variable. 
+role_reln -> "(" _ "role" __ var _ ")" {%
     d => ({
       type: "role_rel",
       name: roleName(d[4]),
@@ -125,82 +151,41 @@ role_relation -> "(" _ "role" __ var_or_name _ ")" {%
     })
 %}
 
-# An init rule defines a relation that holds true at the start of the game.
-init_rule -> "(" _ "init" __ ground_relation _ ")" {%
-    d => ({
-      type: "init_rule",
-      body: d[4],
-      start: start(d[0]),
-      end: end(d[6])
-    })
-%}
+#-------+
+# FACTS |
+#=======*
 
 # A base rule indicates a term or relation of the domain without asserting its
 # presence in the knowledge base.  It helps the solver determine the limits of
 # knowledge, but typically these base rules could be inferred by the game rules.
 base_rule -> "(" _ "base" __ relation _ ")" {%
     d => ({
-      type: "base_rule",
+      type: "base",
       body: d[4],
       start: start(d[0]),
       end: end(d[6])
     })
 %}
 
-# This is a kind of right-to-left inference within a stratified and universally
-# quantified logic as defined by GDL.  The expression is true when either
-# head_expression is true or any body expressions are not true, or both.
-inference -> "(" _ %L_INFER __ head_expression (__ body_expression):* _ ")" {%
+# An init rule defines a relation that holds true at the start of the game.
+init_rule -> "(" _ "init" __ ground_relation _ ")" {%
     d => ({
-      type: "inference",
-      head: d[4],
-      body: d[5],
-      start: startOfToken(d[0]),
-      end: end(d[7])
+      type: "init",
+      body: d[4],
+      start: start(d[0]),
+      end: end(d[6])
     })
 %}
 
-# Only certain game-independent relations will be in the head of an inference.
-head_expression ->
-    input_relation {% id %}
-  | next_relation  {% id %}
-  | base_rule      {% id %}
-  | relation       {% id %}
-
-body_expression ->
-    does_relation {% id %}
-  | role_relation {% id %}
-  | relation      {% id %}
+#---------+
+# ACTIONS |
+#=========*
 
 # An input describes a possible player action.  These are referred to by the
 # `legal` and `does` relations and typically could be inferred from them.
 input_relation -> "(" _ "input" __ var_or_name __ relation _ ")" {%
     d => ({
       type: "input",
-      role: roleName(d[4]),
-      action: d[6],
-      start: start(d[0]),
-      end: end(d[8])
-    })
-%}
-
-# The indicated relation will hold true in the next state if the next relation
-# is itself true (derived by the inference rule it is part of).
-next_relation -> "(" _ "next" __ relation _ ")" {%
-    d => ({
-      type: "next",
-      body: d[4],
-      start: start(d[0]),
-      end: end(d[6])
-    })
-%}
-
-# The indicated player has done the action, either directly or as a result of
-# the Game Master choosing a random action for the player to take.  This
-# relation will typically appear in the body of an inference for a `next` rule.
-does_relation -> "(" _ "does" __ var_or_name __ relation _ ")" {%
-    d => ({
-      type: "does",
       role: roleName(d[4]),
       action: d[6],
       start: start(d[0]),
@@ -219,25 +204,38 @@ legality_rule -> "(" _ "legal" __ var_or_name __ relation _ ")" {%
     })
 %}
 
-relation+ ->
-    _ relation (null | relation+)
-      {% d => [d[1], ...d[3]] %}
-  | _ "\n" relation+
-      {% d => d[2] %}
-  | _ relation _ "\n" relation+ {%
-         d => [d[1], ...d[4]]
-      %}
+# The indicated player has done the action, either directly or as a result of
+# the Game Master choosing a random action for the player to take.  This
+# relation will typically appear in the body of an inference for a `next` rule.
+does_relation -> "(" _ "does" __ var_or_name __ relation _ ")" {%
+    d => ({
+      type: "does",
+      role: roleName(d[4]),
+      action: d[6],
+      start: start(d[0]),
+      end: end(d[8])
+    })
+%}
 
-relation ->
-    logical_relation {% id %}
-  | legality_rule    {% id %}
-  | goal_function    {% id %}
-  | ground_term      {% id %}
+# The indicated relation will hold true in the next state if the next relation
+# is itself true (derived by the inference rule it is part of).
+next_relation -> "(" _ "next" __ relation _ ")" {%
+    d => ({
+      type: "next",
+      body: d[4],
+      start: start(d[0]),
+      end: end(d[6])
+    })
+%}
 
-logical_relation -> "(" _ logical_nary_op __ relation+ _ ")" {%
+#------------+
+# COMPARISON |
+#============*
+
+logical_relation -> "(" _ logical_nary_op __ (relation _)+ ")" {%
     d => ({
       type: d[2],
-      body: [d[4], ...d[6]],
+      body: d[4],
       start: start(d[0]),
       end: end(d[8])
     })
@@ -253,6 +251,13 @@ logical_relation -> "(" _ logical_nary_op __ relation+ _ ")" {%
 logical_nary_op -> ( "distinct" |  "or" | "and" ) {% id %}
 logical_unary_op -> ( "true" | "not" ) {% id %}
 
+#------------+
+# RESOLUTION |
+#============*
+
+# Special GDL keyword that resolves to true when the game has terminated.
+terminal -> "terminal" {% id %}
+
 goal_function -> "(" _ "goal" __ var_or_name __ %NUMBER _ ")" {%
     d => ({
       type: "goal",
@@ -262,6 +267,12 @@ goal_function -> "(" _ "goal" __ var_or_name __ %NUMBER _ ")" {%
       end: end(d[8])
     })
 %}
+
+relation ->
+    logical_relation {% id %}
+  | legality_rule    {% id %}
+  | goal_function    {% id %}
+  | ground_term      {% id %}
 
 # Variables are indicated by a `?` prefix.
 var -> "?" name {%
@@ -301,9 +312,6 @@ ground_term ->
   | name            {% id %}
   | ground_relation {% id %}
 
-# Special GDL keyword that resolves to true when the game has terminated.
-terminal -> "terminal" {% id %}
-
 # Names may be represented as a symbol or a string, and there are equivalent
 # values across those representations so we unify them here.
 name -> %IDENT {%
@@ -312,3 +320,12 @@ name -> %IDENT {%
 name -> %STRING {%
     d => newName(d[0].value, start(d[0]), end(d[0]))
 %}
+
+# Nearley doesn't provide the _ and __ shorthands when using a lexer,
+# but they are much more convenient and readable than %SPACE:* or %SPACE
+# and during matching it allows us to fold them all into `null` as well.
+
+# optional space
+_ -> %SPACE:? {% d => null %}
+# mandatory space
+__ -> %SPACE {% d => null %}

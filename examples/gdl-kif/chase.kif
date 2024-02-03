@@ -1,0 +1,108 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; This unnamed game is taken from the paper "On the Comparative Expressiveness
+;; of Epistemic Models and GDL-II" where it was given as an example of a game
+;; definition with a low input/legal complexity but very large search space.
+;; (paper authors: Ji Ruan & Michael Thielscher)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(role ag1)
+(role ag2)
+(role ag3)
+
+(init at ag1 1 1)
+(init at ag2 5 1)
+(init at ag3 1 5)
+
+(<= terminal
+  (true (at ag1 ?x ?y))
+  (true (at ag3 ?x ?y))
+)
+(<= terminal
+  (true (at ag2 ?x ?y))
+  (true (at ag3 ?x ?y))
+)
+(<= terminal (not remain))
+(<= remain (true (at ag3 ?x ?y)))
+
+(<= (legal ?r stay) (true (at ?r ?x ?y)))
+(<= (legal ag3 exit)
+  (not terminal)
+  (true (at ag3 1 1)))
+(<= (legal ag3 exit)
+  (not terminal)
+  (true (at ag3 1 5)))
+(<= (legal ag3 exit)
+  (not terminal)
+  (true (at ag3 5 1)))
+
+(<= (legal ?r (move ?d))
+  (not terminal)
+  (true (at ?r ?u ?v))
+  (adjacent ?u ?v ?d ?x ?y))
+
+(<= (adjacent ?x ?y1 NORTH ?x ?y2)
+  (co ?x)
+  (succ ?y1 ?y2))
+(<= (adjacent ?x ?y1 SOUTH ?x ?y2)
+  (co ?x)
+  (succ ?y2 ?y1))
+(<= (adjacent ?x1 ?y EAST ?x2 ?y)
+  (co ?y)
+  (succ ?x1 ?x2))
+(<= (adjacent ?x1 ?y WEST ?x2 ?y)
+  (co ?y)
+  (succ ?x2 ?x1))
+
+(<= co(1))
+(<= co(2))
+(<= co(3))
+(<= co(4))
+(<= co(5))
+
+(<= (succ 1 2))
+(<= (succ 2 3))
+(<= (succ 3 4))
+(<= (succ 4 5))
+
+(<= (next (at ?r, ?x, ?y))
+  (does ?r (stay))
+  (true (at ?r ?x ?y)))
+(<= (next (at ?r, ?x, ?y))
+  (does ?r (move ?d))
+  (true (at ?r ?u ?v))
+  (adjacent(?u ?v ?d ?x ?y))
+  (not (captured ?r)))
+(<= (next (at ag3 ?x ?y))
+  (true (at ag3 ?x ?y))
+  (captured ag3))
+
+(<= (captured ag3)
+  (true (at ag3 ?x ?y))
+  (true (at ?r ?u ?v))
+  (does ag3 (move ?d1))
+  (does ?r (move ?d2))
+  (adjacent ?x ?y ?d1 ?u ?v)
+  (adjacent ?u ?v ?d2 ?x ?y))
+
+(<= (goal ?r 0)
+  (role ?r)
+  (not terminal))
+(<= (goal ?r 0)
+  (role ?r)
+  (distinct ?r ag3)
+  (terminal)
+  (not remain))
+
+(<= (goal ?r 100)
+  (role ?r)
+  (distinct ?r ag3)
+  (terminal)
+  (true (at ag3 ?x ?y)))
+
+(<= (goal ag3 0)
+  (terminal)
+  (true (at ag3 ?x ?y)))
+
+(<= (goal ag3 100)
+  (terminal)
+  (not remain))
