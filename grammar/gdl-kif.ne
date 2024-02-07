@@ -24,7 +24,7 @@ import "astutil.js";
 
 @{%
 // Tokenizer definition provided via https://github.com/no-context/moo
-const moo = require('moo')
+const moo = require('moo');
 
 let lexer = moo.compile({
   SPACE: {
@@ -35,12 +35,11 @@ let lexer = moo.compile({
     match: /;+([^\n]*)/,
     value: s => s.substring(1).trim()
   },
-  '(': '(',
-  ')': ')',
   L_INFER: '<=',
   '?': '?',
+  "(": "(",  ")": ")",
   NUMBER: {
-    match: /(0|-?[1-9][0-9]*)/,
+    match: /([0-9]+)/,
     value: s => Number(s)
   },
   STRING: {
@@ -48,7 +47,7 @@ let lexer = moo.compile({
     value: s => JSON.parse(s).slice(1, -1)
   },
   IDENT: {
-    match: /[a-zA-Z]+/,
+    match: /_|[a-zA-Z]+/,
     type: moo.keywords({
       KEYWORD: [
           'role', 'base', 'input',
@@ -66,9 +65,9 @@ let lexer = moo.compile({
           // introduced in GDL-III
           'knows'
       ]
-  })},
-})
-%}  # end of lexer definition
+  })}
+});
+%} # end of lexer definition
 
 @lexer lexer
 
@@ -80,7 +79,7 @@ let lexer = moo.compile({
 input -> _ sentence+ _ {% id %}
 
 # This production rule handles multiple sentences surrounded by optional space.
-sentence+ -> sentence {% d => [d[0]] %}
+sentence+ -> sentence
 
 # continuation if there are multiple sentences
 sentence+ -> sentence+ _ sentence {% d => [ ...d[0], d[2] ] %}
@@ -103,9 +102,9 @@ inference -> "(" _ %L_INFER __ head_relation (__ body_relation):* _ ")" {%
     d => ({
       type: "infer",
       head: d[4],
-      body: d[5],
+      body: d[6],
       start: startOfToken(d[0]),
-      end: end(d[7])
+      end: end(d[8])
     })
 %}
 
