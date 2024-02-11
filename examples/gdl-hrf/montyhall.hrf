@@ -1,0 +1,71 @@
+%% # The Monty Hall game in GDL
+
+%% A game for one player and a host (played by the builtin random).
+role(player)
+role(random)
+
+%% The doors are all initially closed.
+init(closed(1))
+init(closed(2))
+init(closed(3))
+
+init(step(1))
+
+%%
+%% The host's legal moves:
+%%
+
+legal(random, hide_car(?door)) :-
+    true(step(1)) & true(closed(?door))
+
+legal(random, open_door(?door)) :-
+    true(step(2)) & true(closed(?door)) &
+    not true(car(?door)) & not true(chosen(?door))
+
+legal(random, noop) :- true(step(3))
+
+%%
+%% The player's legal moves
+%%
+
+legal(player, choose(?door)) :-
+    true(step(1)) & true(closed(?door))
+
+legal(player, noop) :- true(step(2))
+
+legal(player, noop) :- true(step(3))
+legal(player, switch) :- true(step(3))
+
+%% Consequence of opening a door
+
+sees(player, car) :- does(random, open_door(?door)) & true(car(?door))
+sees(player, goat) :- does(random, open_door(?door)) & ~true(car(?door))
+
+%% Consequences and side effects of actions
+
+next(car(?d)) :- does(random, hide_car(?door))
+next(car(?d)) :- true(car(?door))
+next(closed(?d)) :-
+    true(closed(?d)) & ~does(random, open_door(?door))
+
+next(chosen(?d)) :- does(candidate, choose(?d))
+next(chosen(?door)) :-
+    true(chosen(?door)) & ~does(candidate, switch)
+
+next(chosen(?door)) :-
+    does(candidate, switch) & true(closed(?door)) & ~true(chosen(?door))
+
+%% Progression of step sequence
+
+next(step(2)) :- true(step(1))
+next(step(3)) :- true(step(2))
+next(step(4)) :- true(step(3))
+
+%% Game always ends at step 4.
+
+terminal :- true(step(4))
+
+%% Win/lose conditions
+
+goal(player, 100) :- true(chosen(?d)) & true(car(?d))
+goal(player, 0) :- true(chosen(?d)) & ~true(car(?d))
