@@ -1,0 +1,100 @@
+%% A simple card game in GDL-II
+%
+% Adapted from the simple card game in GDL-II from [Thielscher 2010]
+% "A General Game Description Language for Incomplete Information Games"
+% in Proceedings of the 24th AAAI Conference.
+
+% Two player roles and a `random` role for dealing cards from the deck.
+role(donna)
+role(rick)
+role(random)
+
+% A player is a non-random role.
+player(R) :- role(R) & distinct(R, random)
+
+% Play starts with dealing.
+init(dealingRound)
+
+
+%% DEALER MOVES
+
+legal(random, deal(C, D)) :-
+  true(dealingRound)
+  & card(C) & card(D) & distinct(C, D)
+
+legal(random, noop) :- true(bettingRound)
+
+
+%% PLAYER MOVES
+
+legal(R, noop) :- true(dealingRound) & player(R)
+legal(R, allIn) :- true(bettingRound) & player(R)
+legal(R, fold) :- true(bettingRound) & player(R)
+
+
+%% EPISTEMIC RULES
+
+sees(donna, dealtCard(C)) :- does(random, deal(C, _))
+sees(rick, dealtCard(C)) :- does(random, deal(_, C))
+
+sees(donna, ricksBid(B)) :- does(rick, B) & true(bettingRound)
+sees(rick, donnasBid(B)) :- does(donna, B) & true(bettingRound)
+
+sees(donna, ricksCard(C)) :-
+  does(donna, allIn) & does(rick, allIn)
+  & true(hasCard(rick, C))
+sees(rick, donnasCard(C)) :-
+  does(rick, allIn) & does(donna, allIn)
+  & true(hasCard(donna, C))
+
+
+%% CONSEQUENCE RULES
+
+next(hasCard(donna, C)) :- does(random, deal(C, _))
+next(hasCard(rick, C)) :- does(random, deal(_, C))
+
+next(bet(R, C, allIn)) :- does(R, allIn) & true(hasCard(R, C))
+next(bet(R, C, fold)) :- does(R, fold) & true(hasCard(R, C))
+
+next(bettingRound) :- true(dealingRound)
+
+
+%% TERMINATION & GOAL OUTCOMES
+
+terminal :- ~true(dealingRound) & ~true(bettingRound)
+
+goal(R, 100) :-
+  true(bet(R, C, allIn)) & true(bet(S, D, allIn))
+  & beats(C, D)
+goal(R, 75) :-
+  true(bet(R, C, allIn)) & true(bet(S, D, fold))
+goal(R, 50) :-
+  true(bet(R, C, fold)) & true(bet(S, D, fold)) & distinct(R, S)
+goal(R, 25) :-
+  true(bet(R, C, fold)) & true(bet(S, D, allIn))
+goal(R, 0) :-
+  true(bet(R, C, allIn)) & true(bet(S, D, allIn))
+  & beats(D, C)
+
+
+%% DATA AND BASIC RELATIONS
+
+card(7)
+card(8)
+card(9)
+card(10)
+card(jack)
+card(queen)
+card(king)
+card(ace)
+
+succ(7, 8)
+succ(8, 9)
+succ(9, 10)
+succ(10, jack)
+succ(jack, queen)
+succ(queen, king)
+succ(king, ace)
+
+beats(C, D) :- succ(D, C)
+beats(C, D) :- succ(X, C) & beats(X, D)

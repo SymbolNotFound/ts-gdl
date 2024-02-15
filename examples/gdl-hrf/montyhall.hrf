@@ -15,12 +15,12 @@ init(step(1))
 %% The host's legal moves:
 %%
 
-legal(random, hide_car(?door)) :-
-    true(step(1)) & true(closed(?door))
+legal(random, hide_car(Door)) :-
+    true(step(1)) & true(closed(Door))
 
-legal(random, open_door(?door)) :-
-    true(step(2)) & true(closed(?door)) &
-    not true(car(?door)) & not true(chosen(?door))
+legal(random, open(Door)) :-
+    true(step(2)) & true(closed(Door)) &
+    not true(car(Door)) & not true(chosen(Door))
 
 legal(random, noop) :- true(step(3))
 
@@ -28,8 +28,8 @@ legal(random, noop) :- true(step(3))
 %% The player's legal moves
 %%
 
-legal(player, choose(?door)) :-
-    true(step(1)) & true(closed(?door))
+legal(player, choose(Door)) :-
+    true(step(1)) & true(closed(Door))
 
 legal(player, noop) :- true(step(2))
 
@@ -38,22 +38,22 @@ legal(player, switch) :- true(step(3))
 
 %% Consequence of opening a door
 
-sees(player, car) :- does(random, open_door(?door)) & true(car(?door))
-sees(player, goat) :- does(random, open_door(?door)) & ~true(car(?door))
+sees(player, car) :- does(random, open(Door)) & true(car(Door))
+sees(player, goat) :- does(random, open(Door)) & ~true(car(Door))
 
 %% Consequences and side effects of actions
 
-next(car(?d)) :- does(random, hide_car(?door))
-next(car(?d)) :- true(car(?door))
-next(closed(?d)) :-
-    true(closed(?d)) & ~does(random, open_door(?door))
+next(car(Door)) :- does(random, hide_car(Door))
+next(car(Door)) :- true(car(Door))
+next(closed(Door)) :-
+    true(closed(Door)) & ~does(random, open(Door))
 
-next(chosen(?d)) :- does(candidate, choose(?d))
-next(chosen(?door)) :-
-    true(chosen(?door)) & ~does(candidate, switch)
+next(chosen(Door)) :- does(candidate, choose(Door))
+next(chosen(Door)) :-
+    true(chosen(Door)) & ~does(candidate, switch)
 
-next(chosen(?door)) :-
-    does(candidate, switch) & true(closed(?door)) & ~true(chosen(?door))
+next(chosen(Door)) :-
+    does(candidate, switch) & true(closed(Door)) & ~true(chosen(Door))
 
 %% Progression of step sequence
 
@@ -61,11 +61,10 @@ next(step(2)) :- true(step(1))
 next(step(3)) :- true(step(2))
 next(step(4)) :- true(step(3))
 
-%% Game always ends at step 4.
+%% termination & goal evaluation
 
+% The game always ends in three steps
 terminal :- true(step(4))
 
-%% Win/lose conditions
-
-goal(player, 100) :- true(chosen(?d)) & true(car(?d))
-goal(player, 0) :- true(chosen(?d)) & ~true(car(?d))
+goal(player, 100) :- true(chosen(Door)) & true(car(Door))
+goal(player, 0) :- true(chosen(Door)) & ~true(car(Door))
