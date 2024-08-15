@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Symbol Not Found L.L.C.
+// Copyright (c) 2023 Symbol Not Found
 // 
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -12,25 +12,42 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 // 
-// github:SymbolNotFound/ggdl/ts/gdl/astutil.js -- AST utility functions
+// github:SymbolNotFound/ts-gdl/astgdl.js
 
+// Represents AST nodes
+class AstNode {
+  constructor(type, start, end) {
+    this.type = type;
+    this.lexeme = { start, end }
+  }
+}
+
+// All AST nodes are given start and end positions to locate them lexically.
+class Position {
+  constructor(line, column) {
+    this.line = line
+    this.column = column
+  }
+}
 
 // Returns a {line, col} position object for the beginning of a token.
 function start(token) {
-    return {
-        line: token.line,
-        col: token.col
-    };
+  return new Position(token.line, token.col)
 }
 
 // Returns a {line, col} position for the end of a token.  NOTE: this assumes
 // there are no newlines within the token (such as in space-capturing tokens).
 // Albeit unlikely, avoid using this function on tokens that may contain `\n`.
 function end(token) {
-    return {
-        line: token.line,
-        col: token.col + token.text.length
-    };
+  return new Position(token.line, token.col + token.text.length)
+}
+
+
+class Role extends AstNode {
+  constructor(name, start, end) {
+    super('role', start, end)
+    this.name = name
+  }
 }
 
 function newRole(name, start, end) {
@@ -44,7 +61,7 @@ function newRole(name, start, end) {
 
 function newRoleVar(name, start, end) {
   return {
-    'type': 'role_var',
+    'type': 'rolevar',
     'name': name,
     'start': start,
     'end': end
@@ -82,10 +99,9 @@ function newAction(actionType, roleName, action, start, end) {
   };
 }
 
-function newFunction(funcName, params, start, end) {
+function newRelation(funcName, params, start, end) {
   return {
-    'type': 'function',
-    'name': funcName,
+    'relation': funcName,
     'params': params,
     'start': start,
     'end': end
