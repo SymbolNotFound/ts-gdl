@@ -37,12 +37,13 @@ function start(token) {
 
 // Returns a {line, col} position for the end of a token.  NOTE: this assumes
 // there are no newlines within the token (such as in space-capturing tokens).
-// Albeit unlikely, avoid using this function on tokens that may contain `\n`.
+// Albeit unlikely, avoid using this function on tokens that may contain `\n`,
+// or modify the production rule to have its final token exist within one line.
 function end(token) {
   return new Position(token.line, token.col + token.text.length)
 }
 
-
+// A role definition, its name is always a ground constant symbol or string.
 class Role extends AstNode {
   constructor(name, start, end) {
     super('role', start, end)
@@ -50,117 +51,130 @@ class Role extends AstNode {
   }
 }
 
-function newRole(name, start, end) {
-  return {
-    'type': 'role',
-    'name': name,
-    'start': start,
-    'end': end
-  };
+// A variable that only unifies with the role type.
+class RoleVar extends AstNode {
+  constructor(varname, start, end) {
+    super('rolevar', start, end)
+    this.varname = varname
+  }
 }
 
-function newRoleVar(name, start, end) {
-  return {
-    'type': 'rolevar',
-    'name': name,
-    'start': start,
-    'end': end
-  };
+// An operator with a single operand.
+class UnaryOp extends AstNode {
+  constructor(opname, operand, start, end) {
+    super(opname, start, end)
+    this.operand = operand
+  }
 }
 
-function newUnaryOp(opName, child, start, end) {
-  return {
-    'type': 'unaryOp',
-    'name': opName,
-    'child': child,
-    'start': start,
-    'end': end
-  };
+// An operator with two operands (e.g. logical AND, distinct, etcetera).
+class BinaryOp extends AstNode {
+  constructor(opname, left, right, start, end) {
+    super(opname, start, end)
+    this.left = left
+    this.right = right
+  }
 }
 
-function newBinaryOp(opName, left, right, start, end) {
-  return {
-    'type': 'binaryOp',
-    'name': opName,
-    'left': left,
-    'right': right,
-    'start': start,
-    'end': end
-  };
+// Declares an input as a base relation.
+class ActionInput extends AstNode {
+  constructor(rolename, action, start, end) {
+    super('input', start, end)
+    this.role = rolename
+    this.action = action
+  }
 }
 
-function newAction(actionType, roleName, action, start, end) {
-  return {
-    'type': actionType,
-    'role': roleName,
-    'action': action,
-    'start': start,
-    'end': end
-  };
+// The head of a rule that describes allowed actions for certain players.
+class ActionLegal extends AstNode {
+  constructor(rolename, action, start, end) {
+    super('legal', start, end)
+    this.role = rolename
+    this.action = action
+  }
 }
 
-function newRelation(funcName, params, start, end) {
-  return {
-    'relation': funcName,
-    'params': params,
-    'start': start,
-    'end': end
-  };
+// A body clause may include this as a fact of a certain player's action.
+class ActionDone extends AstNode {
+  constructor(rolename, action, start, end) {
+    super('does', start, end)
+    this.role = rolename
+    this.action = action
+  }
 }
 
-function newInference(outcome, premises, start, end) {
-  return {
-    'type': 'infer',
-    'outcome': outcome,
-    'premises': premises,
-    'start': start,
-    'end': end
-  };
+// The head of a rule that describes a relation to hold true in the next turn,
+// provided that the relations in the body are consistent with the model.
+class ActionNext extends AstNode {
+  constructor(action, start, end) {
+    super('next', start, end)
+    this.action = action
+  }
 }
 
-function newGoal(agent, amount, start, end) {
-  return {
-    'type': 'goal',
-    'agent': agent,
-    'amount': amount,
-    'start': start,
-    'end': end
-  };
+// A relation may be a function, an object or a multivariate ground fact.
+class Relation extends AstNode {
+  constructor(name, params, start, end) {
+    super('relation', start, end)
+    this.name = name
+    this.arity = len(params)
+    this.params = params
+    this.ground = (name[0] >= 'a' && name[0] <= 'z')
+  }
 }
 
-function newTerminal(tok) {
-  return {
-    'type': 'terminal',
-    'start': start(tok),
-    'end': end(tok)
-  };
+// A fact is like a function or relation of arity 0.
+class Fact extends AstNode {
+  constructor(relation, start, end) {
+    super('fact', start, end)
+    this.relation = relation
+  }
 }
 
-function newName(name, start, end) {
-  return {
-    'type': 'name',
-    'name': name,
-    'start': start,
-    'end': end
-  };
+// A variable, a term which may be replaced with a constant during unification.
+class Variable extends AstNode {
+  constructor(varname, start, end) {
+    super('var', start, end)
+    this.varname = varname
+  }
 }
 
-function newVar(name, start, end) {
-  return {
-    'type': 'var',
-    'name': name,
-    'start': start,
-    'end': end
-  };
+// A rule implies that `head` is true when `body` is consistent with the model.
+class Rule extends AstNode {
+  constructor(ruletype, head, body, start, end) {
+    super(ruletype, start, end)
+    this.head = head
+    this.body = body
+  }
 }
 
-function newGroundRelation(relName, terms, start, end) {
-  return {
-    'type': "relation",
-    'grounded': true,
-    'name': relName,
-    'terms': terms,
-    'start': start,
-    'end': end
-  };
+// Defines a domain in terms of facts or relations that may hold true.
+class BaseRule extends Rule {
+  constructor(head, body, start, end) {
+    super('base', head, body, start, end)
+  }
+}
+
+// Indicates that the relation is true, conditioned on body (if it exists).
+class InitRule extends Rule {
+  constructor(head, body, start, end) {
+    super('init', head, body, start, end)
+  }
+}
+
+// The special fact indicating that the game has terminated.
+class Terminal extends Fact {
+  constructor(start, end) {
+    super('terminal', start, end)
+  }
+}
+
+// A special operation on a role and a numeric value from 0 to 100 (inclusive).
+// The body of the rule which this relation is the head of will determine that
+// this goal evaluates to true.
+// Goals should be mutually exclusive for each player.
+class Goal extends BinaryOp {
+  constructor(name, value, start, end) {
+    super('goal', name, value, start, end)
+  }
 }
