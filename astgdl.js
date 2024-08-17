@@ -14,7 +14,7 @@
 // 
 // github:SymbolNotFound/ts-gdl/astgdl.js
 
-// Represents AST nodes
+// Represents all AST nodes, including (leaf) node type and lexical positioning.
 class AstNode {
   constructor(type, start, end) {
     this.type = type;
@@ -119,7 +119,6 @@ class Relation extends AstNode {
     this.name = name
     this.arity = len(params)
     this.params = params
-    this.ground = (name[0] >= 'a' && name[0] <= 'z')
   }
 }
 
@@ -174,7 +173,9 @@ class Terminal extends Fact {
 // this goal evaluates to true.
 // Goals should be mutually exclusive for each player.
 class Goal extends BinaryOp {
-  constructor(name, value, start, end) {
-    super('goal', name, value, start, end)
+  constructor(name, utility, start, end) {
+    super('goal', start, end)
+    this.name = name
+    this.utility = utility
   }
 }

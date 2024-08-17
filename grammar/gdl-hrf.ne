@@ -14,7 +14,6 @@
 #
 # gdl-hrf.ne: grammar definition for Human-Readable Format of GDL.
 
-
 @{%
 import "astgdl.js";
 %}
@@ -106,50 +105,6 @@ rulesheet -> _ sentences _ {% s => s[1] %}
 sentences -> sentence
 sentences -> sentences _ sentence {% s => [ ...s[0], s[2] ] %}
 
-# Vocabulary
-
-# A set of object constants
-object -> %NAME {% s => ({ "ast": "object", "name": s[0] }) %}
-
-# A variable is any symbol that starts with a capital letter.
-variable -> %VAR {% s => ({ "ast": "var", "name": s[0].value }) %}
-
-# Valid terms include objects, variables and function applications.
-term ->
-    object    {% id %}
-  | variable  {% id %}
-  | functiona {% id %}
-
-functiona -> %NAME _ "(" _ terms _ ")" {%
-  s => ({
-    "ast": "function",
-    "name": s[0],
-    "arity": len(s[4]),
-    "args": s[4]
-  }) %}
-
-# Multiple terms may be joined with commas.
-terms -> term
-  | terms _ "," _ term {% s => [ ...s[0], s[4] ] %}
-
-# A relation begins with a (non-variable) name and its corresponding terms.
-relation -> %NAME _ "(" _ terms _ ")" {%
-  s => ({
-    "ast": "relation",
-    "name": s[0],
-    "arity": len(s[4]),
-    "terms": s[4]
-  }) %}
-
-# A literal is an atomic relation or the negation of an atomic relation.
-# The `~` unary operator and the `not/1` function are synonyms.  GDL further
-# requires that any variable in a negated relation must also appear in a
-# positive term, and not appear in the head.  Further, there is a stratification
-# requirement, and the usual assumption about safety and 
-literal -> relation {% id %}
-  | "~" _ relation {% s => ({ "ast": "not", "expr": s[2] }) %}
-  | "not" _ "(" _ relation _ ")" {% s => ({ "ast": "not", "expr": s[4] }) %}
-
 # A sentence is a relation (non-negated) or one of the special relations,
 # or an inference, including inferences with other special GDL relations.
 sentence ->
@@ -164,7 +119,7 @@ relation ->
     logical_relation {% id %}
   | legal_relation   {% id %}
   | goal_relation    {% id %}
-  | functiona        {% id %}
+  | functionapply    {% id %}
 
 
 #-----------.
@@ -174,12 +129,7 @@ relation ->
 # An inference consists of a head (the conclusion) and its body (premises),
 # zero or more propositions which &'ed together determine the head's truth.
 inference -> head_relation _ %L_INFER _ conjunction {%
-  s => ({
-    infer: s[0],
-    when: s[4],
-    start: s[0].start,
-    end: s[4][len(s[4])-1].end
-  })
+    s => new Rule(':-', s[0], s[4], s[0].start, s[4][len(s[4])-1].end)
 %}
 
 # Only certain game-independent relations will be in the head of an inference.
@@ -187,17 +137,20 @@ head_relation ->
     input_relation {% id %}
   | next_relation  {% id %}
   | base_rule      {% id %}
-  | functiona      {% id %}
+  | functionapply  {% id %}
+
+# A conjunction joins terms in a logical and operation.
+conjunction -> body_relation {% id %}
+conjunction -> conjunction _ "&" _ body_relation {%
+    s => new BinaryOp('&', s[0], s[4], s[0].start, s[4].end)
+%}
 
 # Only certain game-independent relations will be in the body of an inference.
 body_relation ->
-    does_relation {% id %}
-  | role_var      {% id %}
-  | functiona     {% id %}
-
-# A conjunction joins terms in a logical and operation.
-conjunction -> body_relation
-  | conjunction _ "&" _ body_relation {% s => [ ...s[0], s[4] ] %}
+    does_relation    {% id %}
+  | role_var         {% id %}
+  | logical_relation {% id %}
+  | functionapply    {% id %}
 
 #--------------.
 # PLAYER ROLES |
@@ -205,7 +158,7 @@ conjunction -> body_relation
 
 # `role(a)` means that `a` is a role in the game.  It is a complete sentence.
 role_defn -> "role" _ "(" _ name _ ")" {%
-    s => newRole(s[4].name, start(s[0]), end(s[6]))
+    s => new Role(s[4].name, start(s[0]), end(s[6]))
 %}
 
 # `role(?p)` is a relation binding the variable `?p` to a valid role.  It is
@@ -213,7 +166,7 @@ role_defn -> "role" _ "(" _ name _ ")" {%
 # acting roles from their opponents or their pieces from their opponents'.
 # It typically appears within relations in the body (premises) of an inference.
 role_var -> "role" _ "(" _ var _ ")" {%
-    s => newRoleVar(s[5].name, start(s[0]), end(s[7]))
+    s => new RoleVar(s[5].name, start(s[0]), end(s[7]))
 %}
 
 #-------.
@@ -223,19 +176,14 @@ role_var -> "role" _ "(" _ var _ ")" {%
 # `base(p)` means that `p` is a base proposition in the game's knowledge base.
 # This describes the domain but does not assert the existence of any relations.
 # It may be part of an inference to further constrain its proposition's terms.
-base_rule -> "base" _ "(" _ functiona _ ")" {%
-    s => newBaseRule(s[4], start(s[0]), end(s[6]))
+base_rule -> "base" _ "(" _ term _ ")" {%
+    s => new BaseRule(s[4], start(s[0]), end(s[6]))
 %}
 
 # `init(p)` means that the proposition `p` is true in the initial state.  There
 # must not be any free variables in the relation within `init`.
-init_rule -> "init" _ "(" _ ground_relation _ ")" {%
-    s => newInitRule(s[4], start(s[0]), end(s[6]))
-%}
-
-# `true(p)` means that the proposition `p` is true in the current state.
-true_function -> "true" _ "(" _ functiona _ ")" {%
-    s => newUnaryOp('true', s[4], start(s[0]), end(s[6]))
+init_rule -> "init" _ "(" _ term _ ")" {%
+    s => new InitRule(s[4], start(s[0]), end(s[6]))
 %}
 
 #---------.
@@ -243,26 +191,26 @@ true_function -> "true" _ "(" _ functiona _ ")" {%
 #========='
 
 # `input(r, a)` means that `a` is an action for role `r`.
-input_relation -> "input" _ "(" _ name _ "," _ functiona _ ")" {%
-    s => newAction('input', s[4], s[8], start(s[0]), end(s[10]))
+input_relation -> "input" _ "(" _ name _ "," _ functionapply _ ")" {%
+    s => new ActionInput(s[4], s[8], start(s[0]), end(s[10]))
 %}
 
 # `legal(r, a)` means it is legal for role `r` to play `a` in the current state.
 # It must be defined in terms of input `true` relation(s).
-legal_relation -> "legal" _ "(" _ name _ "," _ functiona _ ")" {%
-    s => newAction('legal', s[4], s[8], start(s[0]), end(s[10]))
+legal_relation -> "legal" _ "(" _ name _ "," _ functionapply _ ")" {%
+    s => new ActionLegal(s[4], s[8], start(s[0]), end(s[10]))
 %}
 
 # `does(r, a)` means that player `r` performs action `a` in the current state.
-does_relation -> "does" _ "(" _ name _ "," _ functiona _ ")" {%
-    s => newAction('does', s[4], s[8], start(s[0]), end(s[10]))
+does_relation -> "does" _ "(" _ name _ "," _ functionapply _ ")" {%
+    s => new ActionDone(s[4], s[8], start(s[0]), end(s[10]))
 %}
 
 # `next(p)` means that the proposition `p` is true in the next state.
 # This will typically appear in the head of an inference and must depend on
 # `true` and `does` relations in its premises.
-next_relation -> "next" _ "(" _ functiona _ ")" {%
-    s => newNext(s[4], start(s[0]), end(s[6]))
+next_relation -> "next" _ "(" _ functionapply _ ")" {%
+    s => new ActionNext(s[4], start(s[0]), end(s[6]))
 %}
 
 #------------.
@@ -275,31 +223,32 @@ logical_relation ->
   | or_function   {% id %}
   | distinct_op   {% id %}
 
+# `true(p)` means that the proposition `p` is true in the current state.
+true_function -> "true" _ "(" _ functionapply _ ")" {%
+    s => new UnaryOp('true', s[4], start(s[0]), end(s[6]))
+%}
+
 # `not(p)` evaluates to true if proposition is not in KB, false if it is.
-not_function -> "not" _ "(" _ functiona _ ")" {%
-    s => newUnaryOp('not', s[4], start(s[0]), end(s[6]))
+not_function -> "not" _ "(" _ term _ ")" {%
+    s => new UnaryOp('not', s[4], start(s[0]), end(s[6]))
+%}
+# Alternate representation of logical negation.
+not_function -> "~" term {%
+    s => new UnaryOp('not', s[1], start(s[0]), s[1].end)
 %}
 
 # `or(a, b, ...)` evaluates to true if any of its parameters return true.
-or_function -> "or" _ "(" _ relation _ "," param_list ")" {%
-    s => newFunction('or', [s[4], ...s[7]], start(s[0]), end(s[8]))
+or_function -> "or" _ "(" _ relation _ "," _ terms _ ")" {%
+    s => new Relation('or', [s[4], ...s[8]], start(s[0]), end(s[8]))
 %}
 
 # Distinct (`#`) evaluates to true if `a` and `b` are syntactically inequal.
 distinct_op -> term _ "#" _ term {%
-  s => distinct(s[0], s[4]) %}
-distinct_op -> "distinct" _ "(" _ term _ "," _ term _ ")" {%
-  s => distinct(s[4], s[8]) %}
-
-@{%
-function distinct(term1, term2) {
-  return {
-    "ast": "function",
-    "name": "distinct",
-    "arity": 2,
-    "args": [ term1, term2 ]
-  };
-}
+    s => new BinaryOp('distinct', s[0], s[4], s[0].start, s[4].end)
+%}
+# Distinct may also be formatted as a function application.
+distinct_op -> "distinct" _ "(" _ term _ "," _ terms _ ")" {%
+    s => new Relation('distinct', [s[4], ...s[8]], start(s[4]), end(s[10]))
 %}
 
 #------------.
@@ -308,35 +257,15 @@ function distinct(term1, term2) {
 
 # Terminal is just another object but it has a very important meaning in GDL.
 # It indicates that the current state is one which ends the game.
-terminal -> "terminal" {% s => ({ "ast": "terminal" }) %}
-object -> terminal {% id %}
+terminal -> "terminal" {%
+    s => new Relation('terminal', [], start(s[0]), end(s[0]))
+%}
 
 # `goal(r, u)` means that the current state has utility `u` for player `r`. 
 # The inference it is a part of must have premises defined in terms of `true`.
 goal_relation -> "goal" _ "(" _ name _ "," _ %NUMBER _ ")" {%
-    s => newGoal(s[4], s[8], start(s[0]), end(s[10]))
+    s => new Goal(s[4], s[8], start(s[0]), end(s[10]))
 %}
-
-#-----------------.
-# GROUND RELATION |
-#================='
-
-ground_relation -> sym_name _ "(" _ ground_term+ _ ")" {%
-    s => newGroundRelation(s[0], s[4], start(s[0]), end(s[6]))
-%}
-
-# Produces a list of terms, all of which do not contain any free variables.
-ground_term+ ->
-    ground_term
-  | ground_term+ _ "," _ ground_term {%
-        s => [...s[0], s[4]]
-    %}
-
-# A ground term is one that is non-variable, including the special terminal obj.
-ground_term ->
-    %NUMBER         {% id %}
-  | object          {% id %}
-  | ground_relation {% id %}
 
 #---------.
 # GENERAL |
@@ -345,35 +274,48 @@ ground_term ->
 # optional space
 _ -> null 
    | %SPACE  {% s => null %}
-   | %SPACE? %COMMENT {% s => { comment: s[1] } %}
+   | _ %COMMENT %SPACE? {% s => ({ comment: [...s[0], s[1]] }) %}
 
 # A symbol is when quoted terms are avoided, 
-sym_name -> %NAME {%
-    s => newName(s[0].value, start(s[0]), end(s[0]))
-%}
+sym_name -> %NAME {% s => s[0].value %}
 
 # A name may be a quoted string or an unquoted symbolic name (function_name).
 name -> sym_name {% id %}
-name -> %STRING {%
-    s => newName(s[0].value, start(s[0]), end(s[0]))
-%}
+name -> %STRING {% s => s[0].value %}
 
 # A variable has its own namespace and represents a substitution for an atom.
 var -> %VAR {%
-    s => newVar(s[0].value, start(s[0]), end(s[1]))
+    s => new Variable(s[0].value, start(s[0]), end(s[0]))
 %}
 
 # Some productions expect either a var or a name but only a single term.
 var_or_name -> var {% id %} | name {% id %}
 
-parameters ->
-    param_list {% id %}
-  | null {% () => [] %}
+#---------.
+# GENERAL |
+#========='
 
-param_list -> relation {%
-    s => [s[0]]
+# Valid terms include objects, variables and function applications.
+term ->
+    object           {% id %}
+  | variable         {% id %}
+  | logical_relation {% id %}
+  | functionapply    {% id %}
+
+# An object constant is any relation that has arity 0.
+object -> %NAME {% s => new Relation(s[0], [], start(s[0]), end(s[0])) %}
+
+# The reserved keyword `terminal` is also a valid object.
+object -> terminal {% id %}
+
+# A variable is any symbol that starts with a capital letter.
+variable -> %VAR {% s => new Variable(s[0].value, start(s[0]), end(s[0])) %}
+
+# A relation that has arity greater =>= 1.
+functionapply -> %NAME _ "(" _ terms _ ")" {%
+    s => new Relation(s[0], s[4], s[0].start, end(s[6]))
 %}
 
-param_list -> param_list _ "," _ relation {%
-    s => [...s[0], s[4]]
-%}
+# Multiple terms may be joined with commas.
+terms -> term
+  | terms _ "," _ term {% s => [ ...s[0], s[4] ] %}
