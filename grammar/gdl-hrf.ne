@@ -1,22 +1,32 @@
-# Copyright (c) 2023 Symbol Not Found L.L.C.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# Copyright (c) 2024 Symbol Not Found
 # 
-#     http://www.apache.org/licenses/LICENSE-2.0
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
 # 
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 #
 # gdl-hrf.ne: grammar definition for Human-Readable Format of GDL.
+
 
 @{%
 import "astgdl.js";
 %}
+
+# Enable this to compile to TypeScript instead of JavaScript
+# @preprocessor typescript
 
 @{%
 // Tokenizer definition provided via https://github.com/no-context/moo
@@ -56,8 +66,8 @@ let lexer = moo.compile({
   },
   NAME: {
     match: /[a-z][0-9A-Z_a-z]*/,
-    type: moo.keywords({
-      KEYWORD: [
+    type: moo.keywords(
+      Object.fromEntries([
           'role',
           'base',
           'input',
@@ -79,15 +89,12 @@ let lexer = moo.compile({
           // introduced in GDL-II
           'sees',
           'random',
-      ]
-  })}
+          // introduced in GDL-III
+          'knows'
+      ]).map(k => ['kw-'+k, k]))}
 });
 %} # end of lexer definition
-
 @lexer lexer
-
-# Enable this to compile to TypeScript instead of JavaScript
-# @preprocessor typescript
 
 #-----------.
 # SENTENCES |
@@ -98,7 +105,6 @@ let lexer = moo.compile({
 # definitions for `role`, `input`, `base`, and `init`.
 
 input -> rulesheet
-
 rulesheet -> _ sentences _ {% s => s[1] %}
 
 # Multiple sentences.  Note, left-recursion is faster for Earley.
@@ -108,17 +114,9 @@ sentences -> sentences _ sentence {% s => [ ...s[0], s[2] ] %}
 # A sentence is a relation (non-negated) or one of the special relations,
 # or an inference, including inferences with other special GDL relations.
 sentence ->
-    role_defn {% id %}
-  | init_rule {% id %}
-  | base_rule {% id %}
-  | inference {% id %}
-  | relation  {% id %}
-
-# A set of relation constants with associated arity.
-relation ->
-    logical_relation {% id %}
-  | legal_relation   {% id %}
-  | goal_relation    {% id %}
+    role_defn        {% id %}
+  | inference        {% id %}
+  | object           {% id %}
   | functionapply    {% id %}
 
 
@@ -134,9 +132,13 @@ inference -> head_relation _ %L_INFER _ conjunction {%
 
 # Only certain game-independent relations will be in the head of an inference.
 head_relation ->
-    input_relation {% id %}
+    base_rule      {% id %}
+  | init_rule      {% id %}
+  | input_relation {% id %}
   | next_relation  {% id %}
-  | base_rule      {% id %}
+  | legal_relation {% id %}
+  | goal_relation  {% id %}
+  | object         {% id %}
   | functionapply  {% id %}
 
 # A conjunction joins terms in a logical and operation.
@@ -149,8 +151,7 @@ conjunction -> conjunction _ "&" _ body_relation {%
 body_relation ->
     does_relation    {% id %}
   | role_var         {% id %}
-  | logical_relation {% id %}
-  | functionapply    {% id %}
+  | term             {% id %}
 
 #--------------.
 # PLAYER ROLES |
@@ -166,7 +167,7 @@ role_defn -> "role" _ "(" _ name _ ")" {%
 # acting roles from their opponents or their pieces from their opponents'.
 # It typically appears within relations in the body (premises) of an inference.
 role_var -> "role" _ "(" _ var _ ")" {%
-    s => new RoleVar(s[5].name, start(s[0]), end(s[7]))
+    s => new RoleVar(s[4].name, start(s[0]), end(s[7]))
 %}
 
 #-------.
@@ -191,25 +192,25 @@ init_rule -> "init" _ "(" _ term _ ")" {%
 #========='
 
 # `input(r, a)` means that `a` is an action for role `r`.
-input_relation -> "input" _ "(" _ name _ "," _ functionapply _ ")" {%
+input_relation -> "input" _ "(" _ name _ "," _ term _ ")" {%
     s => new ActionInput(s[4], s[8], start(s[0]), end(s[10]))
 %}
 
 # `legal(r, a)` means it is legal for role `r` to play `a` in the current state.
 # It must be defined in terms of input `true` relation(s).
-legal_relation -> "legal" _ "(" _ name _ "," _ functionapply _ ")" {%
+legal_relation -> "legal" _ "(" _ name _ "," _ term _ ")" {%
     s => new ActionLegal(s[4], s[8], start(s[0]), end(s[10]))
 %}
 
 # `does(r, a)` means that player `r` performs action `a` in the current state.
-does_relation -> "does" _ "(" _ name _ "," _ functionapply _ ")" {%
+does_relation -> "does" _ "(" _ name _ "," _ term _ ")" {%
     s => new ActionDone(s[4], s[8], start(s[0]), end(s[10]))
 %}
 
 # `next(p)` means that the proposition `p` is true in the next state.
 # This will typically appear in the head of an inference and must depend on
 # `true` and `does` relations in its premises.
-next_relation -> "next" _ "(" _ functionapply _ ")" {%
+next_relation -> "next" _ "(" _ term _ ")" {%
     s => new ActionNext(s[4], start(s[0]), end(s[6]))
 %}
 
@@ -224,7 +225,7 @@ logical_relation ->
   | distinct_op   {% id %}
 
 # `true(p)` means that the proposition `p` is true in the current state.
-true_function -> "true" _ "(" _ functionapply _ ")" {%
+true_function -> "true" _ "(" _ term _ ")" {%
     s => new UnaryOp('true', s[4], start(s[0]), end(s[6]))
 %}
 
@@ -238,7 +239,7 @@ not_function -> "~" term {%
 %}
 
 # `or(a, b, ...)` evaluates to true if any of its parameters return true.
-or_function -> "or" _ "(" _ relation _ "," _ terms _ ")" {%
+or_function -> "or" _ "(" _ term _ "," _ terms _ ")" {%
     s => new Relation('or', [s[4], ...s[8]], start(s[0]), end(s[8]))
 %}
 

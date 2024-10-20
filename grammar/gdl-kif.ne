@@ -1,22 +1,28 @@
-# Copyright (c) 2023 Symbol Not Found L.L.C.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# Copyright (c) 2024 Symbol Not Found
 # 
-#     http://www.apache.org/licenses/LICENSE-2.0
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
 # 
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+# 
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
 #
 # gdl-kif.ne: grammar definition for prefix-notation format of GDL.
 
 
 @{%
-import "astutil.js";
+import "astgdl.js";
 %}
 
 # Enable this to compile to TypeScript instead of JavaScript
@@ -39,17 +45,17 @@ let lexer = moo.compile({
   '?': '?',
   "(": "(",  ")": ")",
   NUMBER: {
-    match: /([0-9]+)/,
+    match: /(0|-?[1-9][0-9]*)/,
     value: s => Number(s)
   },
   STRING: {
     match: /"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\\n])*"/,
     value: s => JSON.parse(s).slice(1, -1)
   },
-  IDENT: {
+  NAME: {
     match: /_|[a-zA-Z]+/,
-    type: moo.keywords({
-      KEYWORD: [
+    type: moo.keywords(
+      Object.fromEntries([
           'role', 'base', 'input',
           'init', 'terminal', 'goal',
           'next', 'legal', 'does',
@@ -64,11 +70,9 @@ let lexer = moo.compile({
           'sees', 'random'
           // introduced in GDL-III
           'knows'
-      ]
-  })}
+      ]).map(k => ['kw-'+k, k]))}
 });
 %} # end of lexer definition
-
 @lexer lexer
 
 #-----------+
@@ -76,7 +80,8 @@ let lexer = moo.compile({
 #===========*
 
 # First production rule is the default production for the parser.
-input -> _ sentence+ _ {% id %}
+input -> rulesheet
+rulesheet -> _ sentence+ _ {% s => s[1] %}
 
 # This production rule handles multiple sentences surrounded by optional space.
 sentence+ -> sentence
@@ -86,8 +91,6 @@ sentence+ -> sentence+ _ sentence {% d => [ ...d[0], d[2] ] %}
 
 sentence ->
     role_defn {% id %}
-  | init_rule {% id %}
-  | base_rule {% id %}
   | inference {% id %}
   | relation  {% id %}
 
@@ -100,9 +103,8 @@ sentence ->
 # head_expression is true or any body expressions are not true, or both.
 inference -> "(" _ %L_INFER __ head_relation (__ body_relation):* _ ")" {%
     d => ({
-      type: "infer",
-      head: d[4],
-      body: d[6],
+      infer: d[4],
+      when: d[6],
       start: startOfToken(d[0]),
       end: end(d[8])
     })
@@ -110,27 +112,20 @@ inference -> "(" _ %L_INFER __ head_relation (__ body_relation):* _ ")" {%
 
 # Only certain game-independent relations will be in the head of an inference.
 head_relation ->
-    input_relation {% id %}
+    base_rule      {% id %}
+  | init_rule      {% id %}
+  | input_relation {% id %}
   | next_relation  {% id %}
-  | base_rule      {% id %}
-  | relation+      {% id %}
+  | legal_relation {% id %}
+  | goal_relation  {% id %}
+  | object         {% id %}
+  | functionapply  {% id %}
 
 # Only certain game-independent relations will be in the body of an inference.
 body_relation ->
     does_relation {% id %}
-  | role_reln     {% id %}
-  | relation+     {% id %}
-
-relation+ -> relation {% id %} 
-relation+ -> relation+ _ relation {% 
-  d => [...d[0], d[2]]
-%}
-
-relation ->
-    logical_relation {% id %}
-  | legality_rule    {% id %}
-  | goal_function    {% id %}
-  | ground_term      {% id %}
+  | role_var      {% id %}
+  | term          {% id %}
 
 #--------------+
 # PLAYER ROLES |
@@ -138,22 +133,12 @@ relation ->
 
 # Role definition, a role relation appearing at the global scope.
 role_defn -> "(" _ "role" __ name _ ")" {%
-  d => ({
-    type: "role_def",
-    name: d[4],
-    start: start(d[0]),
-    end: end(d[6])
-  })
+    s => new Role(s[4].name, start(s[0]), end(s[6]))
 %}
 
 # A role relation can refer to a ground term or a variable. 
-role_reln -> "(" _ "role" __ var _ ")" {%
-  d => ({
-    type: "role_rel",
-    name: roleName(d[4]),
-    start: start(d[0]),
-    end: end(d[6])
-  })
+role_var -> "(" _ "role" __ var _ ")" {%
+    s => new RoleVar(s[4].name, start(s[0]), end(s[6]))
 %}
 
 #-------+
@@ -164,22 +149,12 @@ role_reln -> "(" _ "role" __ var _ ")" {%
 # presence in the knowledge base.  It helps the solver determine the limits of
 # knowledge, but typically these base rules could be inferred by the game rules.
 base_rule -> "(" _ "base" __ relation _ ")" {%
-  d => ({
-    type: "base",
-    body: d[4],
-    start: start(d[0]),
-    end: end(d[6])
-  })
+    s => new BaseRule(s[4], start(s[0]), end(s[6]))
 %}
 
 # An init rule defines a relation that holds true at the start of the game.
 init_rule -> "(" _ "init" __ ground_relation _ ")" {%
-  d => ({
-    type: "init",
-    body: d[4],
-    start: start(d[0]),
-    end: end(d[6])
-  })
+    s => new InitRule(s[4], start(s[0]), end(s[6]))
 %}
 
 #---------+
@@ -284,44 +259,19 @@ goal_function -> "(" _ "goal" __ var_or_name __ %NUMBER _ ")" {%
   })
 %}
 
-#-----------------+
-# GROUND RELATION |
-#=================*
-
-# Grounded relations are composed entirely of ground terms and other ground
-# relations.  This is enforced at the syntax level here in the parser.
-ground_relation -> "(" _ name (__ ground_term+ {% d => d[1] %}):? _ ")" {%
-  d => ({
-    type: "relation",
-    grounded: true,
-    relation: d[2],
-    parameters: d[3],
-    start: start(d[0]),
-    end: end(d[5])
-  })
-%}
-
-# Produces a list of terms, all of which do not contain any free variables.
-ground_term+ ->
-    ground_term+ __ ground_term {%
-        d => [...d[0], d[2]]
-    %}
-  | ground_term _ {% d => [d[1]] %}
-
-# A ground term is one that is non-variable.  If it contains a relation in the
-# term then that relation and its members are also ground.
-ground_term ->
-    %NUMBER         {% id %}
-  | name            {% id %}
-  | terminal        {% id %}
-  | ground_relation {% id %}
-
 #---------+
 # GENERAL |
 #=========*
 
+term ->
+    object           {% id %}
+  | terminal         {% id %}
+  | variable         {% id %}
+  | logical_relation {% id %}
+  | functionapply    {% id %}
+
 # Variables are indicated by a `?` prefix.
-var -> "?" name {%
+variable -> "?" name {%
   d => ({
     type: "variable",
     name: d[1],
