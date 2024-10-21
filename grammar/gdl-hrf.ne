@@ -39,8 +39,7 @@ let lexer = moo.compile({
   },
   COMMENT: {
     // Human-readable format GDL typically uses `%` for comments.
-    match: /%+([^\n]*)/,
-    value: s => s.substring(1).trim()
+    match: /%+([^\n]*)/
   },
   L_INFER: ":-",
   DYN_COND: "::",
