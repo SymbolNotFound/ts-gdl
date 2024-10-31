@@ -1,4 +1,4 @@
-# ts-gdl
+# ts-gdl v0.1
 
 TypeScript implementation of GDL (Games Description Language) 
 and the building block grammars that support it.
