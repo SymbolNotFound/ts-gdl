@@ -90,7 +90,7 @@ let lexer = moo.compile({
           'random',
           // introduced in GDL-III
           'knows'
-      ]).map(k => ['kw-'+k, k]))}
+      ].map(k => ['kw-'+k, k])))}
 });
 %} # end of lexer definition
 @lexer lexer
