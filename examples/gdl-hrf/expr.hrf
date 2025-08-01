@@ -1,0 +1,44 @@
+;; paths/ancestors basics
+link(1, 2)
+link(2, 3)
+link(3, 4)
+path(X Y) :- link(X, Y)
+path(X Y) :- path(X, Z) & link(Z Y)
+
+;; Problem #1
+x(1) x(2) x(3) x(4)
+foo(X, Y) :- x(X) & x(Y)
+rpath(X, Y) :- path(Y, X)
+
+;; Negation (and multiline)
+not-path(X, Y) :-
+    x(X) &
+    x(Y) &
+    not(path(X, Y))
+
+;; Distinct
+diff(X, Y) :- x(X) & x(Y) & X # Y
+
+;; Disjunction
+valid?(X, Y) :-
+    not-path(X, Y) &
+    (distinct(Y, 4) or
+     distinct(X, 4))
+
+;; 0-arity predicates
+open :- true(cell(M, N, b))
+terminal :- not(open)
+
+;; Problem #2
+s(1) s(2) t(1)
+p(X) :- q(X) & s(X)
+q(X) :- p(X) & t(X)
+q(X) :- t(X)
+
+;; Negative in front
+not-y(X) :- not(s(X)) & x(X)
+
+;; Problem #3
+true(cell(1, 1, o))
+legal(x, X) :- true(X)
+
