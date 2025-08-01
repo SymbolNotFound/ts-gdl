@@ -1,0 +1,45 @@
+;; paths/ancestors basics
+(link 1 2)
+(link 2 3)
+(link 3 4)
+(<= (path ?x ?y) (link ?x ?y))
+(<= (path ?x ?y) (path ?x ?z) (link ?z ?y))
+
+;; Problem #1
+(x 1) (x 2) (x 3) (x 4)
+(<= (foo ?x ?y) (x ?x) (x ?y))
+(<= (rpath ?x ?y) (path ?y ?x))
+
+;; Negation (and multiline)
+(<= (not-path ?x ?y)
+    (x ?x)
+    (x ?y)
+    (not (path ?x ?y)))
+
+;;; Distinct
+;(<= (diff0 ?x) (distinct ?x 0))
+;(<= (diff1 ?x) (path 1 ?y) (distinct ?x ?y))
+(<= (diff ?x ?y) (x ?x) (x ?y) (distinct ?x ?y))
+
+;;; Or
+(<= (valid? ?x ?y)
+    (not-path ?x ?y)
+    (or (distinct ?y 4)
+        (distinct ?x 4)))
+
+;;; 0-arity predicates
+(<= open (true (cell ?m ?n b)))
+(<= terminal (not open))
+
+;;; Problem #2
+(s 1) (s 2) (t 1)
+(<= (p ?x) (q ?x) (s ?x))
+(<= (q ?x) (p ?x) (t ?x))
+(<= (q ?x) (t ?x))
+
+;;; Negative in front
+(<= (not-y ?x) (not (s ?x)) (x ?x))
+
+;;; Problem #3
+(true (cell 1 1 o))
+(<= (legal x ?x) (true ?x))
