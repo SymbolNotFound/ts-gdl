@@ -58,3 +58,43 @@ let lexer = moo.compile({
 %}
 @lexer lexer
 
+rulesheet -> _ sentences _ {%
+  s => s[1]
+%}
+
+sentences -> sentence {% id %}
+sentences -> sentences __ sentence {%
+  s => [ ...s[0], s[2] ]
+%}
+
+sentence ->
+    role_defn        {% id %}
+  | inference        {% id %}
+  | object           {% id %}
+
+role_defn -> L_PAREN _ "role" _ %SYMBOL _ R_PAREN {%
+  s => new ast.RoleDefinition(s[4])
+%}
+
+inference ->
+  L_PAREN _ L_INFER _ head_relation _ body_relations _ R_PAREN {%
+  s => new ast.Inference(s[4].name, s[6])  
+%}
+
+head_relation ->
+    base_rule
+  | init_rule
+  | input_rel
+  | next_rel
+  | legal_rel
+  | goal_rel
+  | object
+
+body_relations -> body_relation
+body_relations -> body_relations _ body_relation
+
+body_relation ->
+    does_relation
+  | role_var
+  | term
+
