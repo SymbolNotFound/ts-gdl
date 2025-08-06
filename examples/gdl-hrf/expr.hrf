@@ -6,7 +6,7 @@ path(X Y) :- link(X, Y)
 path(X Y) :- path(X, Z) & link(Z Y)
 
 ;; Problem #1
-x(1) x(2) x(3) x(4)
+x(1..4)
 foo(X, Y) :- x(X) & x(Y)
 rpath(X, Y) :- path(Y, X)
 
@@ -31,14 +31,14 @@ terminal :- not(open)
 
 ;; Problem #2
 s(1) s(2) t(1)
-p(X) :- q(X) & s(X)
-q(X) :- p(X) & t(X)
-q(X) :- t(X)
+p :- q & s
+q :- p & t
+q :- t
 
 ;; Negative in front
-not-y(X) :- not(s(X)) & x(X)
+not-y(X) :- not s(X) & x(X)
 
 ;; Problem #3
 true(cell(1, 1, o))
-legal(x, X) :- true(X)
-
+legal(x, move(X)) :- true(s(X))
+x -> move(X) ==> t(x)
