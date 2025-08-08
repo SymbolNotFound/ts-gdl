@@ -20,30 +20,29 @@ Stay tuned for more!
 
 ## Features
 
-[ ] Parses GDL formatted as KIF
+[x] Parses GDL formatted as KIF
 [x] Parses GDL formatted as HRF
 [ ] Initializes database from GDL rulesheet
 [ ] Infers available actions from current database
-[ ] Updates database from (simultaneous) player actions
+[ ] Updates database from simultaneous player actions
 [ ] Evaluates database for whether play has terminated
 [ ] Evaluates database for goal payout to players
 [ ] Renders and simulates gameplay in a Vue component
 
-This is still a work in progress, check back soon!
-
-## Using as a Library
+## Using the parser to produce ASTs
 
 ...
 
 
-## Using as a Vue component
+## Using the library to host and simulate games
 
 ...
 
 
 ## Writing GDL games
 
-see documentation (source can be found in `/docs`)
+See [documentation](https://ts-gdl.kevindamm.com/)
+(source can be found in `/docs`)
 
 ...
 
