@@ -1,0 +1,114 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; Tic-Tac-Toe, including modifications to enable identifying
+;;; a variable's permanent/persistent/ephemeral property.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Roles
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (role xplayer)
+  (role oplayer)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Initial State
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (coord 1) (coord 2) (coord 3)
+  (<= (iscell ?m ?n) (coord ?m) (coord ?n))
+
+  (init (control xplayer))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Dynamic Components
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Cell
+
+  (<= (next (cell ?m ?n x))
+      (does xplayer (mark ?m ?n)))
+
+  (<= (next (cell ?m ?n o))
+      (does oplayer (mark ?m ?n)))
+
+  (<= (next (cell ?m ?n ?p))
+      (true (cell ?m ?n ?p)))
+
+  (<= (next (control xplayer))
+      (true (control oplayer)))
+
+  (<= (next (control oplayer))
+      (true (control xplayer)))
+
+  (<= (empty ?m ?n)
+      (iscell ?m ?n)
+      (not (true (cell ?m ?n o)))
+      (not (true (cell ?m ?n x))))
+
+  (<= (row ?m ?p)
+      (true (cell ?m 1 ?p))
+      (true (cell ?m 2 ?p))
+      (true (cell ?m 3 ?p)))
+
+  (<= (column ?n ?p)
+      (true (cell 1 ?n ?p))
+      (true (cell 2 ?n ?p))
+      (true (cell 3 ?n ?p)))
+
+  (<= (diagonal ?p)
+      (true (cell 1 1 ?p))
+      (true (cell 2 2 ?p))
+      (true (cell 3 3 ?p)))
+
+  (<= (diagonal ?p)
+      (true (cell 1 3 ?p))
+      (true (cell 2 2 ?p))
+      (true (cell 3 1 ?p)))
+
+  (<= (line ?p) (row ?m ?p))
+  (<= (line ?p) (column ?n ?p))
+  (<= (line ?p) (diagonal ?p))
+
+  (<= open (empty ?m ?n))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (<= (legal ?p (mark ?m ?n))
+      (empty ?m ?n)
+      (true (control ?p)))
+
+  (<= (legal xplayer noop)
+      (true (control oplayer)))
+
+  (<= (legal oplayer noop)
+      (true (control xplayer)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (<= (goal xplayer 100)
+      (line x))
+
+  (<= (goal xplayer 50)
+      (not (line x))
+      (not (line o))
+      (not open))
+
+  (<= (goal xplayer 0)
+      (line o))
+
+  (<= (goal oplayer 100)
+      (line o))
+
+  (<= (goal oplayer 50)
+      (not (line x))
+      (not (line o))
+      (not open))
+
+  (<= (goal oplayer 0)
+      (line x))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  (<= terminal (line ?p))
+
+  (<= terminal (not open))
