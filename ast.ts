@@ -51,10 +51,12 @@ export interface Relation {
 
 export type Symbol = string
 
+export type Variable = { name: string }
+
 export type Atom =
-    | {type: 'variable', varname: Symbol }
-    | {type: 'funcall', fn: FunCall}
-    | {type: 'constant', constant: Symbol }
+    | {type: 'variable' } & Variable
+    | {type: 'funcall' } & FunCall
+    | {type: 'constant' } & Literal
 
 export interface FunCall {
   name: Symbol

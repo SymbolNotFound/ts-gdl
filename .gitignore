@@ -1,3 +1,8 @@
+# games can be obtained from Stanford's online collection
+games/base
+games/dresden
+games/stanford
+
 # Vitepress
 docs/.vitepress/dist
 docs/.vitepress/cache
