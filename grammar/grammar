@@ -1,0 +1,113 @@
+rulesheet->
+  _ sentences _
+  {% s => s[1] %}
+
+sentences -> sentence
+sentences -> sentences _ sentence {% s => [...s[0], s[2]] %}
+
+sentence ->
+    fact          {% id %}
+  | rule          {% id %}
+  | "#" metafact  {% id %}
+
+fact ->
+    role_defn    {% id %}
+  | base_rel     {% id %}
+  | init_rel     {% id %}
+  | legal_rel    {% id %}
+  | literal_rel  {% id %}
+  | literal      {% id %}
+
+rule ->
+  "(" _ "<=" _
+    head_term _
+    body_terms _
+  ")"
+  {% s => new Rule(s[4], ...s[6]) %}
+  
+head_term ->
+    base_rel
+  | init_rel
+  | legal_rel
+  | input_rel
+  | next_rel
+  | terminal
+  | term
+
+body_terms -> "(" _ body_term _ ")"
+body_terms -> body_terms _ "(" _ body_term _ ")"
+
+body_term ->
+    role_var
+  | does_rel
+  | exists_fn
+  | logic_expr
+
+metafact ->
+    meta_author
+  | meta_title
+  # ...
+
+role_defn -> ...
+
+role_var -> ...
+
+base_rel -> ...
+
+init_rel -> ...
+
+legal_rel -> ...
+
+does_rel -> ...
+
+exists_fn -> ...
+
+meta_author -> "author" __ meta_text
+
+meta_title -> "title" __ meta_text
+
+meta_text ->
+    %STRING                {% id %}
+  | /[a-zA-Z0-9][^\n]*\n/  {% id %}
+
+
+logic_expr ->
+    logic_expr _ "and" _ logic_expr
+  | logic_expr _ "or" _ logic_expr
+  | "not" _ logic_expr
+  | "(" _ logic_expr _ ")"
+  | constraint
+
+constraint ->
+    numeric_expr
+  | numeric_expr _ "=" _ value
+  | numeric_expr _ "==" _ value
+  | numeric_expr _ "#" _ value
+  | numeric_expr _ "#<" _ value
+  | numeric_expr _ "#>" _ value
+  | numeric_expr _ "#=<" _ value
+  | numeric_expr _ "#>=" _ value
+
+numeric_expr ->
+    value
+  | numeric_expr _ "+" _ numeric_expr
+  | numeric_expr _ "-" _ numeric_expr
+  | numeric_expr _ "*" _ numeric_expr
+  | numeric_expr _ "/" _ numeric_expr
+  | numeric_expr _ "+." _ numeric_expr
+  | numeric_expr _ "-." _ numeric_expr
+  | numeric_expr _ "*." _ numeric_expr
+  | numeric_expr _ "/." _ numeric_expr
+
+term ->
+    value
+  | relation
+
+value ->
+    variable
+  | literal
+
+literal_rel -> ...
+
+literal -> ...
+
